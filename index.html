@@ -137,6 +137,13 @@ input[readonly]{opacity:.7}
 .lgi{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:8px;font-size:15px}
 .chips{display:flex;gap:8px;margin-top:8px}
 .tabs button{font-size:14px;padding:12px 4px}
+.sb{display:flex;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid var(--bd)}
+.sb span{font-size:18px}
+.sb input{padding:10px 12px;border-radius:10px}
+.mow{width:46px;text-align:right;flex:none}
+.mo{font-size:13px;font-weight:700;color:var(--mu)}
+.mo.up{color:#14a05a}
+.mo.dn{color:#d93636}
 </style>
 </head>
 <body>
@@ -158,7 +165,7 @@ $("shade").onclick=function(){drawer(false)};
 function renderMain(){
   var t=S.tab==="torneos";
   $("app").innerHTML='<header><div class="bar"><button class="ib" id="menu" aria-label="Menú"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><h1>Liga Manager</h1></div>'+
-  '<div class="tabs"><button id="t1" class="'+(t?"on":"")+'">Torneos</button><button id="t2" class="'+(S.tab==="equipos"?"on":"")+'">Equipos</button><button id="t3" class="'+(S.tab==="ranking"?"on":"")+'">Ranking</button><button id="t4" class="'+(S.tab==="calendario"?"on":"")+'">Calendario</button></div></header>'+
+  '<div class="tabs"><button id="t1" class="'+(t?"on":"")+'">Torneos</button><button id="t2" class="'+(S.tab==="equipos"?"on":"")+'">Equipos</button><button id="t3" class="'+(S.tab==="ranking"?"on":"")+'">Ranking</button><button id="t4" class="'+(S.tab==="calendario"?"on":"")+'">Calendario</button></div>'+(S.tab==="equipos"?'<div class="sb"><span>🔍</span><input id="eq" type="search" placeholder="Buscar equipo" value="'+esc(S.eq||"")+'"></div>':'')+'</header>'+
   '<main>'+body()+'</main>'+
   (S.tab==="ranking"||S.tab==="torneos"||S.tab==="calendario"?"":'<button class="fab" id="fab" aria-label="Añadir">+</button>');
   $("menu").onclick=function(){drawer(true)};
@@ -167,6 +174,9 @@ function renderMain(){
   $("t3").onclick=function(){S.tab="ranking";renderMain()};
   $("t4").onclick=function(){S.tab="calendario";renderMain()};
   calWire();
+  var eq=$("eq");if(eq){eq.oninput=function(){S.eq=eq.value;paintEq()}}
+  var rsb=document.querySelectorAll("main .seg button");
+  for(var q2=0;q2<rsb.length;q2++){(function(b){b.onclick=function(){S.rk=+b.getAttribute("data-v")===1;renderMain()}})(rsb[q2])}
   if($("fab")){$("fab").onclick=function(){if(t){openTForm()}else{openForm(null)}}}
   var cs=document.querySelectorAll(".team");
   for(var k=0;k<cs.length;k++){(function(el){el.onclick=function(){if(el.hasAttribute("data-i")){openForm(+el.getAttribute("data-i"))}else{openDetail(+el.getAttribute("data-t"))}};if(el.hasAttribute("data-i")){lp(el,function(){delItem(el)})}})(cs[k])}
@@ -200,7 +210,7 @@ function renderDrawer(){
 function load(){var d;try{d=JSON.parse(get("fm_data"))}catch(e){}
   if(!d||!d.teams){d={teams:[]}}
   var fix=false;d.teams.forEach(function(t,i){if(!t.id){t.id=Date.now()+i;fix=true}});
-  if(fix){save(d)}ensureT(d);if(accrue(d)){save(d)}return d}
+  if(fix){save(d)}ensureT(d);var nb=false;if(d.baseDate!==today()){d.base=snapPos(d);d.baseDate=today();nb=true}if(accrue(d)||nb){save(d)}return d}
 function save(d){set("fm_data",JSON.stringify(d))}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
 function nextName(ts){var n=1,a=ts.map(function(t){return t.name.toLowerCase()});while(a.indexOf("equipo "+n)>-1){n++}return "Equipo "+n}
@@ -212,7 +222,7 @@ function body(){
     var dd=load();return dd.tournaments.map(function(t,i){return t.fixed?'<div class="team" data-t="'+i+'"><div class="cr">'+(t.fixed==="liga"?"🏟️":"🏆")+'</div><div class="tn"><b>'+esc(t.name)+'</b><small>'+esc(descF(dd,t))+'</small></div></div>':""}).join("")}
   var ts=load().teams;
   if(!ts.length){return '<div class="empty"><b>Aún no hay equipos</b>Pulsa + para añadir tu primer equipo.</div>'}
-  return ts.map(function(t,i){return '<div class="team" data-i="'+i+'"><div class="cr">'+(t.crest?'<img alt="" src="'+esc(t.crest)+'">':'⚽')+'</div><div class="tn"><b>'+esc(t.name)+'</b><small>Valor: '+t.value+(t.fans?' · '+t.fans+' fans':'')+'</small></div></div>'}).join("");
+  return ts.map(function(t,i){if(!eqOk(t)){return ""}return '<div class="team" data-i="'+i+'"><div class="cr">'+(t.crest?'<img alt="" src="'+esc(t.crest)+'">':'⚽')+'</div><div class="tn"><b>'+esc(t.name)+'</b><small>Valor: '+t.value+(t.fans?' · '+t.fans+' fans':'')+'</small></div></div>'}).join("")||'<div class="empty">No hay equipos con ese nombre.</div>';
 }
 function lp(el,fn){var tm=null,fired=false,x0=0,y0=0;
   el.addEventListener("pointerdown",function(e){fired=false;x0=e.clientX;y0=e.clientY;clearTimeout(tm);tm=setTimeout(function(){fired=true;fn()},550)});
@@ -364,6 +374,27 @@ function ensureBonus(d){var lg=null,rey=null;d.tournaments.forEach(function(x){i
   var rb=reyBonus(rey);for(var id in rb){applyDv(d,+id,rb[id])}
   lg.bonus=lg.season;d.log=d.log||[];d.log.push({d:today(),k:"bonus",t:"Fin de Liga y Copa del Rey: valor sumado a los equipos por su posición final"});
   save(d);return true}
+function norm(s){return String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")}
+function eqOk(t){var q=norm(S.eq||"").trim();return !q||norm(t.name).indexOf(q)>-1}
+function wireCards(){var cs=document.querySelectorAll(".team");
+  for(var k=0;k<cs.length;k++){(function(el){el.onclick=function(){if(el.hasAttribute("data-i")){openForm(+el.getAttribute("data-i"))}else{openDetail(+el.getAttribute("data-t"))}};if(el.hasAttribute("data-i")){lp(el,function(){delItem(el)})}})(cs[k])}}
+function paintEq(){var m=document.querySelector("main");if(m){m.innerHTML=body();wireCards()}}
+function rankIds(d,fans){var ts=d.teams.slice();
+  if(fans){return ts.filter(function(q){return (q.fans||0)>0}).sort(function(a,b){return (b.fans||0)-(a.fans||0)||b.value-a.value||a.name.localeCompare(b.name)})}
+  return ts.sort(function(a,b){return b.value-a.value||a.name.localeCompare(b.name)})}
+function snapPos(d){var o={v:{},f:{}};rankIds(d,false).forEach(function(q,i){o.v[q.id]=i+1});rankIds(d,true).forEach(function(q,i){o.f[q.id]=i+1});return o}
+function rankHtml(){var d0=load();ensureBonus(d0);
+  var fans=!!S.rk,ts=rankIds(d0,fans),base=(d0.base||{})[fans?"f":"v"]||{};
+  var h=seg("rk",[[0,"Valor"],[1,"Fans"]],fans?1:0);
+  if(!d0.teams.length){return h+'<div class="empty"><b>Aún no hay equipos</b>Crea equipos en la pestaña Equipos.</div>'}
+  h+='<div class="hint" style="margin:0 0 10px">Las flechas muestran los puestos que sube o baja cada equipo respecto al cierre de ayer.</div>';
+  if(fans&&!ts.length){return h+'<div class="empty"><b>Sin fans todavía</b>Los equipos con fans aparecerán aquí.</div>'}
+  function row(q,pos){var b=base[q.id],mv=(pos&&b!==undefined)?b-pos:null,m=mv===null?"":mv>0?'<span class="mo up">▲ '+mv+'</span>':mv<0?'<span class="mo dn">▼ '+(-mv)+'</span>':'<span class="mo">=</span>';
+    return '<div class="rk"><span class="n">'+(pos||"–")+'</span>'+cr(q)+'<span class="bn">'+esc(q.name)+'</span><span class="v"><b>'+(fans?(q.fans||0):q.value)+'</b> '+(fans?"fans":"valor")+'</span><span class="mow">'+m+'</span></div>'}
+  h+='<div class="tbl">'+ts.map(function(q,i){return row(q,i+1)}).join("")+'</div>';
+  if(fans){var z=d0.teams.filter(function(q){return !((q.fans||0)>0)}).sort(function(a,b){return b.value-a.value||a.name.localeCompare(b.name)});
+    if(z.length){h+='<div class="jh"><span>Sin fans</span></div><div class="tbl">'+z.map(function(q){return row(q,0)}).join("")+'</div>'}}
+  return h}
 function csb(w,txt){return '<button class="btn csim" data-w="'+w+'" style="margin:0">'+txt+'</button>'}
 function ccard(t,x,b){return '<div class="lgi"><b>'+t+'</b><div class="hint" style="margin:4px 0 10px">'+x+'</div>'+b+'</div>'}
 function calWire(){var bs=document.querySelectorAll(".csim");
@@ -412,9 +443,6 @@ function simBr(d,t,r){var n=t.mode==="double"?2:1;
     var va=team(d,m.a).value,vb=team(d,m.b).value;
     do{out=[];sa=hg;sb=ag;todo.forEach(function(){var ga=pois(2.8*va/(va+vb)),gb=pois(2.8*vb/(va+vb));out.push([ga,gb]);sa+=ga;sb+=gb});tries++}while(sa===sb&&tries<30);
     todo.forEach(function(k2,i){saveRes(d,t,k2,m.a,m.b,out[i][0],out[i][1])})})}
-function rankHtml(){var d0=load();ensureBonus(d0);var ts=d0.teams.slice().sort(function(a,b){return b.value-a.value||a.name.localeCompare(b.name)});
-  if(!ts.length){return '<div class="empty"><b>Aún no hay equipos</b>Crea equipos en la pestaña Equipos.</div>'}
-  return '<div class="tbl">'+ts.map(function(q,i){return '<div class="rk"><span class="n">'+(i+1)+'</span>'+cr(q)+'<span class="bn">'+esc(q.name)+'</span><span class="v"><b>'+q.value+'</b> valor</span></div>'}).join("")+'</div>'}
 function applyDv(d,id,dv){var q=team(d,id);if(!q){return 0}var o=q.value;q.value=Math.max(1,Math.round((o+dv)*100)/100);return Math.round((q.value-o)*100)/100}
 function revKey(d,t,k){var o=t.res&&t.res[k];if(o&&o.dv){for(var id in o.dv){applyDv(d,+id,-o.dv[id])}}}
 function revRes(d,t){for(var k in (t.res||{})){revKey(d,t,k)}}
@@ -619,7 +647,7 @@ function renderForm(){
   $("app").innerHTML='<div class="form"><h2>'+(t?"Editar equipo":"Nuevo equipo")+'</h2>'+
   '<button class="crest" id="crest" aria-label="Subir escudo"></button><input type="file" id="file" accept="image/*" hidden>'+
   '<label for="nm">Nombre del equipo</label><input id="nm" maxlength="30" value="'+esc(name)+'">'+
-  (t?'<label for="vl">Valor actual (cambia según los resultados)</label><input id="vl" readonly value="'+esc(val)+'">':'<label for="vl">Valor inicial (número entero, 1 o más)</label><input id="vl" type="number" inputmode="numeric" min="1" step="1" value="'+esc(val)+'"><div class="hint">Después no se puede cambiar a mano: sube o baja según los resultados.</div>')+'<label for="fn">Fans (cada fan suma 0,01 de valor por día)</label><input id="fn" type="number" inputmode="numeric" min="0" step="1" value="'+(t&&t.fans?t.fans:0)+'"><div class="chips"><button type="button" class="sim" data-f="10">+10</button><button type="button" class="sim" data-f="100">+100</button><button type="button" class="sim" data-f="1000">+1000</button></div>'+
+  (t?'<label for="vl">Valor actual (cambia según los resultados)</label><input id="vl" readonly value="'+esc(val)+'">':'<label for="vl">Valor inicial (número entero, 1 o más)</label><input id="vl" type="number" inputmode="numeric" min="1" step="1" value="'+esc(val)+'"><div class="hint">Después no se puede cambiar a mano: sube o baja según los resultados.</div>')+'<label for="fn">Fans (cada fan suma 0,01 de valor por día)</label><input id="fn" type="number" inputmode="numeric" min="0" step="1" value="'+(t&&t.fans?t.fans:0)+'"><div class="chips"><button type="button" class="sim" data-f="1">+1</button><button type="button" class="sim" data-f="10">+10</button><button type="button" class="sim" data-f="100">+100</button><button type="button" class="sim" data-f="1000">+1000</button></div>'+
   '<div class="err" id="err"></div>'+
   '<div class="actions"><button class="btn" id="save">Guardar</button><button class="btn sec" id="back">Volver</button></div></div>';
   function paint(){$("crest").innerHTML=S.crest?'<img alt="" src="'+esc(S.crest)+'">':'<span>+</span><small>Subir escudo</small>'}
