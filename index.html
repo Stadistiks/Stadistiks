@@ -144,6 +144,8 @@ input[readonly]{opacity:.7}
 .mo{font-size:13px;font-weight:700;color:var(--mu)}
 .mo.up{color:#14a05a}
 .mo.dn{color:#d93636}
+.ro #menu,.ro .fab,.ro .csim,.ro .sim,.ro #redraw,.ro .x{display:none!important}
+.ro .team,.ro .mt,.ro .bm{cursor:default}
 </style>
 </head>
 <body>
@@ -155,6 +157,7 @@ input[readonly]{opacity:.7}
 (function(){
 var S={tab:"torneos",mode:"in",confirmClear:false,view:null,edit:null,crest:""};
 var $=function(i){return document.getElementById(i)};
+var sn=$("snap"),RO=!!sn,SNAPSTR=sn?sn.textContent:"";
 function get(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function set(k,v){try{localStorage.setItem(k,v)}catch(e){try{toast("No hay espacio para guardar. Haz una copia de seguridad.")}catch(x){}}}
 function del(k){try{localStorage.removeItem(k)}catch(e){}}
@@ -165,7 +168,7 @@ $("shade").onclick=function(){drawer(false)};
 function renderMain(){
   var t=S.tab==="torneos";
   $("app").innerHTML='<header><div class="bar"><button class="ib" id="menu" aria-label="Menú"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><h1>Liga Manager</h1></div>'+
-  '<div class="tabs"><button id="t1" class="'+(t?"on":"")+'">Torneos</button><button id="t2" class="'+(S.tab==="equipos"?"on":"")+'">Equipos</button><button id="t3" class="'+(S.tab==="ranking"?"on":"")+'">Ranking</button><button id="t4" class="'+(S.tab==="calendario"?"on":"")+'">Calendario</button></div>'+(S.tab==="equipos"?'<div class="sb"><span>🔍</span><input id="eq" type="search" placeholder="Buscar equipo" value="'+esc(S.eq||"")+'"></div>':'')+'</header>'+
+  '<div class="tabs"><button id="t1" class="'+(t?"on":"")+'">Torneos</button><button id="t2" class="'+(S.tab==="equipos"?"on":"")+'">Equipos</button><button id="t3" class="'+(S.tab==="ranking"?"on":"")+'">Ranking</button><button id="t4" class="'+(S.tab==="calendario"?"on":"")+'">Calendario</button></div>'+(S.tab==="equipos"?'<div class="sb"><span>🔍</span><input id="eq" type="search" placeholder="Buscar equipo" value="'+esc(S.eq||"")+'"></div>':'')+'</header>'+(RO?'<div class="hint" style="padding:8px 16px;text-align:center;margin:0">Vista pública · solo lectura</div>':'')+
   '<main>'+body()+'</main>'+
   (S.tab==="ranking"||S.tab==="torneos"||S.tab==="calendario"?"":'<button class="fab" id="fab" aria-label="Añadir">+</button>');
   $("menu").onclick=function(){drawer(true)};
@@ -185,12 +188,13 @@ function renderMain(){
 function renderDrawer(){
   var e=get("fm_session");
   var h='<div class="who"><small>App</small><span>Datos en este móvil · espacio usado aprox. '+Math.round((get("fm_data")||"").length/50000)+' %</span></div>';
-  h+='<button class="item" id="d_bk">Copia de seguridad</button><button class="item" id="d_rs">Restaurar copia</button><input type="file" id="d_f" accept=".json,application/json" hidden>';
+  h+='<button class="item" id="d_bk">Copia de seguridad</button><button class="item" id="d_rs">Restaurar copia</button><button class="item" id="d_pb">Publicar vista pública</button><input type="file" id="d_f" accept=".json,application/json" hidden>';
   h+='<button class="item danger" id="d_clr">'+(S.confirmClear?"Pulsa otra vez para confirmar":"Borrar datos locales")+'</button>';
   h+='<button class="item" id="d_sh">Compartir app</button>';
   $("drawer").innerHTML=h;
   
   $("d_bk").onclick=function(){drawer(false);backup()};
+  $("d_pb").onclick=function(){drawer(false);publicar()};
   $("d_rs").onclick=function(){$("d_f").click()};
   $("d_f").onchange=function(){var f=this.files[0];if(!f){return}var r=new FileReader();r.onload=function(){try{var o=JSON.parse(r.result);if(!o||!Array.isArray(o.teams)){throw 0}set("fm_data",JSON.stringify(o));S.view=null;drawer(false);render();toast("Copia restaurada")}catch(x){toast("El archivo no es una copia válida")}};r.readAsText(f)};
   
@@ -395,6 +399,15 @@ function rankHtml(){var d0=load();ensureBonus(d0);
   if(fans){var z=d0.teams.filter(function(q){return !((q.fans||0)>0)}).sort(function(a,b){return b.value-a.value||a.name.localeCompare(b.name)});
     if(z.length){h+='<div class="jh"><span>Sin fans</span></div><div class="tbl">'+z.map(function(q){return row(q,0)}).join("")+'</div>'}}
   return h}
+function publicar(){var d=load(),json=JSON.stringify(d).replace(/</g,"\\u003c");
+  toast("Preparando el archivo…");
+  fetch(location.href.split("#")[0]).then(function(r){return r.text()}).then(function(src){
+    if(src.indexOf('$("snap")')<0){toast("Primero sube la versión nueva de la app a GitHub");return}
+    var tag='<script type="application/json" id="snap">'+json+'<\/script>',out=src.replace("</head>",function(){return tag+"</head>"}),name="ver.html";
+    var f=new File([out],name,{type:"text/html"});
+    if(navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f],title:"Vista pública"}).catch(function(){});return}
+    var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([out],{type:"text/html"}));a.download=name;document.body.appendChild(a);a.click();document.body.removeChild(a);toast("Archivo descargado")
+  }).catch(function(){toast("Solo funciona en la app instalada y con conexión")})}
 function csb(w,txt){return '<button class="btn csim" data-w="'+w+'" style="margin:0">'+txt+'</button>'}
 function ccard(t,x,b){return '<div class="lgi"><b>'+t+'</b><div class="hint" style="margin:4px 0 10px">'+x+'</div>'+b+'</div>'}
 function calWire(){var bs=document.querySelectorAll(".csim");
@@ -486,7 +499,7 @@ function brk(t){var P=(t.draw||[]).slice(),rs=[],dbl=t.mode==="double";
   return{rs:rs,champ:P.length===1?P[0]:null}}
 function rname(r,n){var a=["Final","Semifinales","Cuartos de final","Octavos de final","Dieciseisavos","Treintaidosavos","Sesentaicuatroavos"],k=n-1-r;return k<7?a[k]:"Ronda "+(r+1)}
 function bline(d,id,sc,w){var q=(id===null||id===undefined)?null:team(d,id);return '<div class="bt'+(w?" w":"")+'">'+(q?cr(q)+'<span class="bn">'+esc(q.name)+'</span>':'<span class="bn mu">Por definir</span>')+(sc!==null?'<b>'+sc+'</b>':'')+'</div>'}
-function bracketHtml(t,d){
+function bracketHtml(t,d){if(RO&&!t.draw){return '<div class="empty"><b>Todavía no</b>El sorteo aún no se ha hecho.</div>'}
   var ids=effMem(d,t).map(function(m){return m.id});
   if(t.fixed==="ascenso"){if(!gateAsc(d)){return '<div class="empty"><b>Todavía no</b>La Copa Ascenso empieza cuando terminen la Liga y la Copa del Rey.</div>'}if(ids.length<=4){return '<div class="empty"><b>Suben todos</b>Hay '+ids.length+' equipos o menos: no hace falta jugar la copa.</div>'}}
   if(ids.length<2){return '<div class="empty"><b>Faltan equipos</b>Añade al menos 2 equipos para sortear los cruces.</div>'}
@@ -685,7 +698,8 @@ function render(){
   if(S.view==="form"){renderForm()}else if(S.view==="tform"){renderTForm()}else if(S.view==="detail"){if(S.picker){renderPicker()}else{renderDetail()}}else if(S.view==="match"){renderMatch()}else{renderMain()}
   renderDrawer();
 }
-try{if(navigator.storage&&navigator.storage.persist){navigator.storage.persist()}}catch(e){}
+if(RO){document.body.className="ro";document.title="Liga Manager · en directo";set=function(){};del=function(){};save=function(){};load=function(){return JSON.parse(SNAPSTR)};ensureBonus=function(){return false};ensureDraw=function(){return false};doSim=function(){};openForm=function(){};openPicker=function(){};delItem=function(){};renderMatch=function(){S.view="detail";renderDetail()}}
+  try{if(!RO&&navigator.storage&&navigator.storage.persist){navigator.storage.persist()}}catch(e){}
 render();
 })();
 </script>
