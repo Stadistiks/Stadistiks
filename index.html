@@ -256,7 +256,12 @@ function backup(){var txt=get("fm_data")||'{"teams":[]}',name="liga-manager-copi
   try{var f=new File([txt],name,{type:"application/json"});
     if(navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f],title:"Copia de seguridad"}).catch(function(){});return}}catch(e){}
   try{var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([txt],{type:"application/json"}));a.download=name;document.body.appendChild(a);a.click();document.body.removeChild(a);toast("Copia descargada")}catch(e){toast("La copia solo funciona en la app instalada")}}
-function elo(vx,vy,gx,gy){var s=gx>gy?1:gx===gy?0.5:0,a=Math.sqrt(vx),e=a/(a+Math.sqrt(vy)),n=Math.abs(gx-gy),g=1+0.2*(Math.min(n,6)-(n>0?1:0));return 0.018*(vx+vy)*g*(s-e)}
+function lam(a,b){var x=Math.pow(a,1.5),y=Math.pow(b,1.5);return 2.8*x/(x+y)}
+function eexp(vx,vy){var lx=lam(vx,vy),ly=lam(vy,vx),px=[Math.exp(-lx)],py=[Math.exp(-ly)],i,j,n,g,s,p,num=0,den=0;
+  for(i=1;i<=10;i++){px[i]=px[i-1]*lx/i;py[i]=py[i-1]*ly/i}
+  for(i=0;i<=10;i++){for(j=0;j<=10;j++){n=Math.abs(i-j);g=1+0.2*(Math.min(n,6)-(n>0?1:0));s=i>j?1:i===j?0.5:0;p=px[i]*py[j];num+=p*g*s;den+=p*g}}
+  return num/den}
+function elo(vx,vy,gx,gy){var s=gx>gy?1:gx===gy?0.5:0,e=eexp(vx,vy),n=Math.abs(gx-gy),g=1+0.2*(Math.min(n,6)-(n>0?1:0));return 0.018*(vx+vy)*g*(s-e)}
 function today(){var x=new Date();return x.getFullYear()+"-"+("0"+(x.getMonth()+1)).slice(-2)+"-"+("0"+x.getDate()).slice(-2)}
 function fecha(s){try{return new Date(s+"T00:00:00").toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"})}catch(e){return s}}
 function accrue(d){var t0=today();if(!d.fanDate){d.fanDate=t0;return true}if(d.fanDate===t0){return false}
@@ -448,13 +453,13 @@ function renderPicker(){
     save(d);S.picker=false;S.q="";render()};
 }
 function saveRes(d,t,key,x,y,gx,gy){t.res=t.res||{};revKey(d,t,key);var qx=team(d,x),qy=team(d,y),dx=elo(qx.value,qy.value,gx,gy),o={};o[x]=gx;o[y]=gy;o.dv={};o.dv[x]=applyDv(d,x,dx);o.dv[y]=applyDv(d,y,-dx);t.res[key]=o}
-function simRound(d,t,k,ids){sched(ids,t.legs)[k].forEach(function(p){var key=lkey(p);if(getRes(t,key,p[0],p[1])){return}var vx=team(d,p[0]).value,vy=team(d,p[1]).value;saveRes(d,t,key,p[0],p[1],pois(2.8*vx/(vx+vy)),pois(2.8*vy/(vx+vy)))})}
+function simRound(d,t,k,ids){sched(ids,t.legs)[k].forEach(function(p){var key=lkey(p);if(getRes(t,key,p[0],p[1])){return}var vx=team(d,p[0]).value,vy=team(d,p[1]).value;saveRes(d,t,key,p[0],p[1],pois(lam(vx,vy)),pois(lam(vy,vx)))})}
 function simBr(d,t,r){var n=t.mode==="double"?2:1;
   brk(t).rs[r].forEach(function(m){if(m.bye||m.a===null||m.b===null||m.g){return}
     var hg=0,ag=0,todo=[],out,sa,sb,tries=0;
     for(var l=1;l<=n;l++){var key="b"+r+"|"+m.i+"|"+l,x=getRes(t,key,m.a,m.b);if(x){hg+=x[0];ag+=x[1]}else{todo.push(key)}}
     var va=team(d,m.a).value,vb=team(d,m.b).value;
-    do{out=[];sa=hg;sb=ag;todo.forEach(function(){var ga=pois(2.8*va/(va+vb)),gb=pois(2.8*vb/(va+vb));out.push([ga,gb]);sa+=ga;sb+=gb});tries++}while(sa===sb&&tries<30);
+    do{out=[];sa=hg;sb=ag;todo.forEach(function(){var ga=pois(lam(va,vb)),gb=pois(lam(vb,va));out.push([ga,gb]);sa+=ga;sb+=gb});tries++}while(sa===sb&&tries<30);
     todo.forEach(function(k2,i){saveRes(d,t,k2,m.a,m.b,out[i][0],out[i][1])})})}
 function applyDv(d,id,dv){var q=team(d,id);if(!q){return 0}var o=q.value;q.value=Math.max(1,Math.round((o+dv)*100)/100);return Math.round((q.value-o)*100)/100}
 function revKey(d,t,k){var o=t.res&&t.res[k];if(o&&o.dv){for(var id in o.dv){applyDv(d,+id,-o.dv[id])}}}
@@ -525,7 +530,7 @@ function renderMatch(){
   function back(msg){S.view="detail";render();toast(msg)}
   $("bk").onclick=function(){S.view="detail";render()};
   $("rnd").onclick=function(){var gs=document.querySelectorAll(".g"),sx,sy,n=0;
-    do{sx=0;sy=0;for(var i=0;i<gs.length;i++){var L=m.legs[i>>1],vx=team(d,L.x).value,vy=team(d,L.y).value,isx=gs[i].getAttribute("data-s")==="x",v=pois(2.8*(isx?vx:vy)/(vx+vy));gs[i].value=v;if(isx){sx+=v}else{sy+=v}}n++}while(m.ko&&sx===sy&&n<30);
+    do{sx=0;sy=0;for(var i=0;i<gs.length;i++){var L=m.legs[i>>1],vx=team(d,L.x).value,vy=team(d,L.y).value,isx=gs[i].getAttribute("data-s")==="x",v=pois(isx?lam(vx,vy):lam(vy,vx));gs[i].value=v;if(isx){sx+=v}else{sy+=v}}n++}while(m.ko&&sx===sy&&n<30);
     err("")};
   $("sv").onclick=function(){var gs=document.querySelectorAll(".g"),vals=[],sx=0,sy=0;
     for(var i=0;i<gs.length;i++){var s=gs[i].value.trim();if(!/^\d+$/.test(s)){err("Escribe los goles de los dos equipos (números enteros, 0 o más).");return}vals.push(+s)}
